@@ -1,0 +1,184 @@
+<UserControl x:Class="ImageViewer.Views.ViewerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ImageViewer.ViewModels"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800"
+             PreviewMouseWheel="UserControl_PreviewMouseWheel">
+    
+    <Grid Background="#1E1E1E">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/> <!-- Filmstrip Row -->
+        </Grid.RowDefinitions>
+        
+        <!-- Filmstrip (Thumbnails) -->
+        <Border Grid.Row="1" Background="#252526" BorderBrush="#333" BorderThickness="0,1,0,0" Height="100">
+            <ListBox ItemsSource="{Binding DataContext.GalleryVM.Images, RelativeSource={RelativeSource AncestorType=Window}}"
+                     SelectedItem="{Binding DataContext.GalleryVM.SelectedImage, RelativeSource={RelativeSource AncestorType=Window}}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     VerticalAlignment="Center">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" IsItemsHost="True"/>
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemContainerStyle>
+                     <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="2"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="bd" BorderThickness="2" BorderBrush="Transparent" CornerRadius="2" Cursor="Hand">
+                                        <ContentPresenter/>
+                                        <Border.InputBindings>
+                                             <MouseBinding MouseAction="LeftClick" 
+                                                           Command="{Binding DataContext.GalleryVM.OpenImageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                           CommandParameter="{Binding}"/>
+                                        </Border.InputBindings>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="bd" Property="BorderBrush" Value="#007ACC"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="bd" Property="BorderBrush" Value="#555"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                     </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Image Source="{Binding Converter={StaticResource PathToBitmapConverter}}" Height="80" Width="100" Stretch="UniformToFill"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                
+                <!-- Handle Click to Switch Image -->
+                 <ListBox.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" 
+                                  Command="{Binding DataContext.OpenImageRequestedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=ListBox}, Path=SelectedItem}"/>
+                 </ListBox.InputBindings>
+                 <!-- Actually, selection change should trigger it automatically if we bind SelectedItem. 
+                      However, GalleryVM.SelectedImage updating doesn't automatically trigger "OpenViewer". 
+                      MainViewModel listens to "OpenImageRequested" event. 
+                      Changing SelectedProperty is not enough. We need a command. -->
+            </ListBox>
+        </Border>
+        
+        <!-- Checkerboard Background -->
+        <Border Grid.Row="0" Background="{StaticResource CheckerboardBrush}"/>
+
+        <!-- Main Image Area -->
+        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
+                      PanningMode="Both">
+            <Image Source="{Binding CurrentImage}" Stretch="Uniform"
+                   MouseMove="Image_MouseMove"
+                   MouseLeftButtonUp="Image_MouseLeftButtonUp">
+                <Image.RenderTransform>
+                    <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}"/>
+                </Image.RenderTransform>
+            </Image>
+        </ScrollViewer>
+
+        <!-- Metadata Overlay -->
+        <Border Grid.Row="0" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="20,50,0,0" 
+                Background="#AA000000" CornerRadius="4" Padding="15" 
+                Visibility="{Binding IsMetadataVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel>
+                <TextBlock Text="Image Info" Foreground="White" FontWeight="Bold" Margin="0,0,0,10"/>
+                <TextBlock Text="{Binding Resolution, StringFormat='Dimensions: {0}'}" Foreground="#CCCCCC"/>
+                <TextBlock Text="{Binding FileSize, StringFormat='Size: {0}'}" Foreground="#CCCCCC" Margin="0,5,0,0"/>
+                <TextBlock Text="{Binding FileFormat, StringFormat='Format: {0}'}" Foreground="#CCCCCC" Margin="0,5,0,0"/>
+                <TextBlock Text="{Binding CreationDate, StringFormat='Date: {0}'}" Foreground="#CCCCCC" Margin="0,5,0,0"/>
+                
+                <Separator Background="#666" Margin="0,10"/>
+                <Button Command="{Binding OpenInExplorerCommand}" Content="Open in Explorer" Background="Transparent" Foreground="#00CCFF" BorderThickness="0" HorizontalAlignment="Left" Cursor="Hand"/>
+                <Button Command="{Binding CopyPathCommand}" Content="Copy Path" Background="Transparent" Foreground="#00CCFF" BorderThickness="0" HorizontalAlignment="Left" Cursor="Hand" Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Color Picker Overlay -->
+        <Border Grid.Row="0" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="20,50,0,0" 
+                Background="#AA000000" CornerRadius="4" Padding="10"
+                Visibility="{Binding IsColorPickerActive, Converter={StaticResource BooleanToVisibilityConverter}}">
+             <StackPanel Orientation="Horizontal">
+                 <Border Width="20" Height="20" CornerRadius="10" Background="{Binding PickedColorHex}" Margin="0,0,10,0"/>
+                 <TextBlock Text="{Binding PickedColorHex}" Foreground="White" VerticalAlignment="Center" FontWeight="Bold"/>
+             </StackPanel>
+        </Border>
+
+        <!-- Floating Toolbar (Overlay) -->
+        <Border Grid.Row="0" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,30" 
+                Background="#CC202020" CornerRadius="10" Padding="15,8">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.5"/>
+            </Border.Effect>
+            
+            <StackPanel Orientation="Horizontal">
+                <!-- Slideshow -->
+                <Button Command="{Binding ToggleSlideshowCommand}" ToolTip="Slideshow (Space)"
+                        Content="&#xE768;" FontFamily="Segoe MDL2 Assets" 
+                        Width="40" Height="40" FontSize="18" Margin="0,0,10,0"
+                        Style="{StaticResource CaptionButtonStyle}" Background="#444444" Foreground="White">
+                        <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="20"/></Style></Button.Resources>
+                </Button>
+
+                <!-- Zoom Controls -->
+                <Button Command="{Binding ZoomOutCommand}" Content="&#xE8A4;" FontFamily="Segoe MDL2 Assets" 
+                        Width="40" Height="40" FontSize="16" Margin="0,0,5,0"
+                        Style="{StaticResource CaptionButtonStyle}" Background="#3E3E3E" Foreground="White">
+                     <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="20"/></Style></Button.Resources>
+                </Button>
+                
+                <TextBlock Text="{Binding Scale, StringFormat={}{0:P0}}" 
+                           Foreground="White" VerticalAlignment="Center" Margin="10,0" Width="40" TextAlignment="Center" FontSize="12"/>
+
+                <Button Command="{Binding ZoomInCommand}" Content="&#xE710;" FontFamily="Segoe MDL2 Assets" 
+                        Width="40" Height="40" FontSize="16" Margin="0,0,15,0"
+                        Style="{StaticResource CaptionButtonStyle}" Background="#3E3E3E" Foreground="White">
+                    <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="20"/></Style></Button.Resources>
+                </Button>
+
+                <Rectangle Width="1" Fill="#555" Margin="0,5,15,5"/>
+
+                <!-- Tools -->
+                <Button Command="{Binding ToggleColorPickerCommand}" ToolTip="Color Picker"
+                        Content="&#xEF3C;" FontFamily="Segoe MDL2 Assets" 
+                        Width="40" Height="40" FontSize="16" Margin="0,0,5,0"
+                        Style="{StaticResource CaptionButtonStyle}" Background="#3E3E3E" Foreground="White">
+                    <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="20"/></Style></Button.Resources>
+                </Button>
+
+                <Button Command="{Binding ToggleMetadataCommand}" ToolTip="Image Info (I)"
+                        Content="&#xE946;" FontFamily="Segoe MDL2 Assets" 
+                        Width="40" Height="40" FontSize="16" Margin="0,0,15,0"
+                        Style="{StaticResource CaptionButtonStyle}" Background="#3E3E3E" Foreground="White">
+                    <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="20"/></Style></Button.Resources>
+                </Button>
+
+                <!-- Actions -->
+                <Button Command="{Binding EditCommand}" Content="Edit" Margin="0,0,10,0" Padding="15,0" Height="36"
+                        Background="#007ACC" Foreground="White" BorderThickness="0" FontWeight="SemiBold">
+                     <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="18"/></Style></Button.Resources>
+                </Button>
+
+                <!-- Navigation -->
+                <Button Command="{Binding DataContext.GoBackCommand, RelativeSource={RelativeSource AncestorType=Window}}" 
+                        Content="Back" Padding="15,0" Height="36"
+                        Background="#333333" Foreground="White" BorderThickness="0">
+                     <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="18"/></Style></Button.Resources>
+                </Button>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
